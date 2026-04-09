@@ -1,59 +1,72 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
-
-import { useColorScheme } from '@/components/useColorScheme';
+import {
+  useFonts,
+  PublicSans_400Regular,
+  PublicSans_500Medium,
+  PublicSans_600SemiBold,
+  PublicSans_700Bold,
+  PublicSans_800ExtraBold,
+  PublicSans_900Black,
+} from '@expo-google-fonts/public-sans';
+import { useUserProfileStore } from '../store/userProfileStore';
+import { useMedicationStore } from '../store/medicationStore';
+import { syncService } from '../services/syncService';
+import { medicamentosDB } from '../data/medicamentosDB';
 
 export {
-  // Catch any errors thrown by the Layout component.
   ErrorBoundary,
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(tabs)',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
+  const { carregarPerfil } = useUserProfileStore();
+  const { carregarMedicacoes } = useMedicationStore();
+
+  const [fontsLoaded] = useFonts({
+    'PublicSans-Regular': PublicSans_400Regular,
+    'PublicSans-Medium': PublicSans_500Medium,
+    'PublicSans-SemiBold': PublicSans_600SemiBold,
+    'PublicSans-Bold': PublicSans_700Bold,
+    'PublicSans-ExtraBold': PublicSans_800ExtraBold,
+    'PublicSans-Black': PublicSans_900Black,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
   useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+    async function init() {
+      // Baixa do HD ou da rede silenciosamente antes de liberar o app
+      const baseDaNuvem = await syncService.getBaseCompleta();
+      medicamentosDB.injetarBaseNuvem(baseDaNuvem);
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+      await Promise.all([carregarPerfil(), carregarMedicacoes()]);
+      if (fontsLoaded) SplashScreen.hideAsync();
     }
-  }, [loaded]);
+    if (fontsLoaded) {
+      init();
+    }
+  }, [fontsLoaded]);
 
-  if (!loaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
   return <RootLayoutNav />;
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <Stack>
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="remedio/[id]"
+        options={{ headerShown: false }}
+      />
+    </Stack>
   );
 }
