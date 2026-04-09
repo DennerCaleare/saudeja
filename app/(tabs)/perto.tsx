@@ -11,7 +11,8 @@ import { colors, spacing, radius, shadows } from '../../constants/theme';
 import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { EstabelecimentoSaude } from '../../types';
-import { buscarTodasFarmacias } from '../../services/farmaciaFusionService';
+import { buscarFarmaciasPopular } from '../../services/farmaciaPopularService';
+import { buscarFarmaciasGooglePlaces } from '../../services/farmaciaGooglePlacesService';
 import { TABELA_CMED_BASE, calcularPMC } from '../../services/precoService';
 
 // Cores solicitadas pela especificação:
@@ -48,7 +49,9 @@ export default function PertoScreen() {
 
   // Filtragem Dinâmica
   const estabelecimentosFiltrados = estabelecimentos.filter((est) => {
-    if (contexto === 'sus') return est.tipo === 'UBS' || est.tipo === 'CAPS' || est.tipo === 'UPA';
+    if (contexto === 'sus')
+      // SUS público (UBS/CAPS/UPA) + Farmácias Populares (credenciadas, remédios gratuitos)
+      return est.tipo === 'UBS' || est.tipo === 'CAPS' || est.tipo === 'UPA' || est.participaFarmaciaPopular === true;
     if (contexto === 'particular') return est.tipo === 'Farmacia';
     return true;
   });
@@ -81,13 +84,53 @@ export default function PertoScreen() {
       if (status !== 'granted') { setErroLoc(true); return; }
       const loc = await Location.getCurrentPositionAsync({});
       setLocalizacao({ lat: loc.coords.latitude, lon: loc.coords.longitude });
-      const [estabsSUS, farmacias, upaProx] = await Promise.all([
-        cnesService.buscarEstabelecimentosProximos(loc.coords.latitude, loc.coords.longitude, 'UBS'),
-        buscarTodasFarmacias(loc.coords.latitude, loc.coords.longitude, 15),
-        cnesService.buscarUPAMaisProxima(loc.coords.latitude, loc.coords.longitude),
+      // Fontes em paralelo:
+      // 1. OSM (Overpass) — farmácias populares + postos SUS comunitários
+      // 2. Google Places — farmácias comerciais (Drogasil, Raia, Pacheco...)
+      // 3. Farmácia Popular gov — para marcar pinos verdes
+      const [osmTodos, gpFarmacias, fpResult] = await Promise.all([
+        cnesService.buscarEstabelecimentosProximos(loc.coords.latitude, loc.coords.longitude),
+        buscarFarmaciasGooglePlaces(loc.coords.latitude, loc.coords.longitude, 15000).catch(() => [] as EstabelecimentoSaude[]),
+        buscarFarmaciasPopular(loc.coords.latitude, loc.coords.longitude, 15).catch(() => [] as EstabelecimentoSaude[]),
       ]);
-      // Remove possiveis UPAs vazias e mescla com farmacias
-      const allEstabs = [...farmacias, ...estabsSUS, ...(upaProx ? [upaProx] : [])];
+
+      // Deduplica Google Places vs OSM por proximidade (<80m = mesma farmácia)
+      // OSM tem prioridade se o ponto já exists; Google Places preenche o que falta
+      const gpSemDuplicata = gpFarmacias.filter(gp =>
+        !osmTodos.some(osm =>
+          osm.tipo === 'Farmacia' &&
+          Math.abs(gp.coordenadas.lat - osm.coordenadas.lat) < 0.0008 &&
+          Math.abs(gp.coordenadas.lon - osm.coordenadas.lon) < 0.0008
+        )
+      );
+
+      // Marca como Farmácia Popular as farmácias que coincidem com API FP
+      const checarFP = (est: EstabelecimentoSaude): EstabelecimentoSaude => {
+        const isFP = fpResult.some(fp =>
+          Math.abs(est.coordenadas.lat - fp.coordenadas.lat) < 0.001 &&
+          Math.abs(est.coordenadas.lon - fp.coordenadas.lon) < 0.001
+        );
+        return isFP ? { ...est, participaFarmaciaPopular: true, atendeSUS: true } : est;
+      };
+
+      const taggedOSM = osmTodos.map(checarFP);
+      const taggedGP  = gpSemDuplicata.map(checarFP);
+
+      // FP extras (governo) sem correspondência em nenhuma fonte anterior
+      const fpExtras = fpResult.filter(fp =>
+        !taggedOSM.some(e =>
+          Math.abs(e.coordenadas.lat - fp.coordenadas.lat) < 0.001 &&
+          Math.abs(e.coordenadas.lon - fp.coordenadas.lon) < 0.001
+        ) && !taggedGP.some(e =>
+          Math.abs(e.coordenadas.lat - fp.coordenadas.lat) < 0.001 &&
+          Math.abs(e.coordenadas.lon - fp.coordenadas.lon) < 0.001
+        )
+      );
+
+      // UPA extraida do próprio OSM — sem chamada Overpass extra
+      const upaProx = taggedOSM.find(e => e.tipo === 'UPA') ?? null;
+
+      const allEstabs = [...taggedOSM, ...taggedGP, ...fpExtras];
       setEstabelecimentos(allEstabs);
       setUPA(upaProx);
     } catch { setErroLoc(true); }
@@ -168,26 +211,34 @@ export default function PertoScreen() {
 
             var locais = ${markersJSON};
             locais.forEach(function(est) {
-              var isFP = est.participaFarmaciaPopular;
-              var isSUS = est.atendeSUS || est.tipo === 'UBS' || est.tipo === 'UPA';
+              var isFP  = !!est.participaFarmaciaPopular;
+              // CAPS, UBS e UPA são todos SUS (cinza); farmácia particular fica azul
+              var isSUS = est.atendeSUS || est.tipo === 'UBS' || est.tipo === 'UPA' || est.tipo === 'CAPS';
               
-              // Definindo cores conforme spec
-              var corHex = isFP ? '#006B3C' : isSUS ? '#546E7A' : '#1565C0';
-              var cIconName = isFP ? 'green' : isSUS ? 'grey' : 'blue';
+              var corHex   = isFP ? '#006B3C' : isSUS ? '#546E7A' : '#1565C0';
+              var cIconName = isFP ? 'green'  : isSUS ? 'grey'    : 'blue';
 
-              var lbl = isFP ? '\u2728 Farm\u00e1cia Popular' : isSUS ? '\u2705 SUS / P\u00fablica' : '\ud83d\udcb0 Particular';
+              var lbl = isFP  ? '\u2728 Farm\u00e1cia Popular'
+                      : isSUS ? (est.tipo === 'UPA'  ? '\ud83d\udea8 Urg\u00eancia / UPA'
+                              : est.tipo === 'CAPS' ? '\ud83e\udde0 Sa\u00fade Mental (CAPS)'
+                              : '\u2705 SUS / P\u00fablica')
+                              : '\ud83d\udcb0 Farm\u00e1cia Particular';
+
               var horarioTxt = est.horarioParsed && est.horarioParsed.textoHoje 
                     ? est.horarioParsed.textoHoje 
-                    : (est.funcionamento24h ? '\u23f0 24 horas / 7 dias' : est.horarioFuncionamento ? '\u23f0 ' + est.horarioFuncionamento : 'Consulte a farm\u00e1cia');
-              
-              var dist = est.distanciaKm < 1 ? (est.distanciaKm * 1000).toFixed(0) + 'm' : est.distanciaKm.toFixed(1) + 'km';
+                    : (est.funcionamento24h ? '\u23f0 24 horas / 7 dias'
+                      : est.horarioFuncionamento ? '\u23f0 ' + est.horarioFuncionamento
+                      : 'Consulte o estabelecimento');
+
+              var distKm = typeof est.distanciaKm === 'number' ? est.distanciaKm : 0;
+              var dist = distKm < 1 ? (distKm * 1000).toFixed(0) + 'm' : distKm.toFixed(1) + 'km';
               var tel = est.telefone ? '<br>\ud83d\udcde ' + est.telefone : '';
 
               var popup = '<b>' + est.nome + '</b>' +
                 '<br><small style="color:' + corHex + '"><b>' + lbl + '</b></small>' +
                 '<br><small>' + horarioTxt + tel + '</small>' +
-                '<br><small>\\ud83d\\udeb6 ' + dist + ' de distancia</small>' +
-                '<br><button class="popup-btn" style="background:#006B3C;" onclick="sendEst(\\'' + est.id + '\\')">Ver detalhes</button>';
+                '<br><small>\ud83d\udeb6 ' + dist + ' de dist\u00e2ncia</small>' +
+                '<br><button class="popup-btn" style="background:' + corHex + ';" onclick="sendEst(\\'' + est.id + '\\')">Ver detalhes</button>';
 
               L.marker([est.lat, est.lon], {icon: cIcon(cIconName)})
                 .addTo(map)
@@ -279,7 +330,7 @@ export default function PertoScreen() {
                 Buscando onde encontrar: <Text style={{ fontFamily: 'PublicSans-Black' }}>{medNome}</Text>
               </Text>
               <Text style={styles.contextoAviso}>
-                Lembrete: A disponibilidade depende exclusivamente do estoque presencial de cada unidade e não pode ser garantida pelo app. {contexto === 'sus' ? 'Ligue ou vá a unidade do SUS mais próxima.' : 'Ligue na farmácia para confirmar.'}
+                Lembrete: A disponibilidade depende do estoque presencial e não pode ser garantida pelo app. {contexto === 'sus' ? 'Leve receita + documento. Mostramos UBS, Farmácias Populares e UPA próximos.' : 'Ligue na farmácia para confirmar disponibilidade e preço.'}
               </Text>
             </View>
           </View>

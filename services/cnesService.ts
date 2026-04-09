@@ -9,6 +9,7 @@
 import type { EstabelecimentoSaude } from '../types';
 import { haversineKm } from '../utils/haversine';
 import { geocodeQueue } from '../utils/geocodeQueue';
+import { parsearHorarioOSM } from '../utils/openingHours';
 
 const CACHE: Map<string, { data: EstabelecimentoSaude[]; ts: number }> = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
@@ -64,7 +65,7 @@ function mapOSMNode(
   userLon: number
 ): EstabelecimentoSaude {
   const lat = node.lat ?? node.center?.lat ?? 0;
-  const lon = node.lon ?? node.center?.lng ?? node.center?.lon ?? 0;
+  const lon = node.lon ?? node.center?.lon ?? 0;
   const hours = node.tags?.opening_hours;
   const nome = node.tags?.name || node.tags?.['name:pt'] || 'Estabelecimento de Saúde';
 
@@ -92,8 +93,10 @@ function mapOSMNode(
     coordenadas: { lat, lon },
     telefone: node.tags?.phone || node.tags?.['contact:phone'],
     horarioFuncionamento: hours && hours !== '24/7' ? hours : undefined,
+    horarioParsed: parsearHorarioOSM(hours),
     funcionamento24h: hours === '24/7',
     atendeSUS: tipoFinal === 'UBS' || tipoFinal === 'UPA',
+    fonte: 'osm' as const,
     distanciaKm: haversineKm(userLat, userLon, lat, lon),
   };
 }
@@ -104,13 +107,17 @@ async function tentarMirror(
   query: string,
   userLat: number,
   userLon: number,
-  timeoutMs = 10000
+  timeoutMs = 30000  // cliente > servidor (25s) para never abortar antes da resposta
 ): Promise<EstabelecimentoSaude[] | null> {
   try {
-    const url = `${mirror}?data=${encodeURIComponent(query)}`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const resp = await fetch(url, { signal: controller.signal });
+    const resp = await fetch(mirror, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: controller.signal,
+    });
     clearTimeout(timer);
     if (!resp.ok) return null;
     const json = await resp.json();
@@ -163,11 +170,11 @@ async function buscarOSM(
       `way["healthcare"="pharmacy"](around:${raioM},${lat},${lon});`
     : '';
 
-  const query = `[out:json][timeout:15];(${amenityTags}${farmTags});out center;`;
+  const query = `[out:json][timeout:25];(${amenityTags}${farmTags});out center tags;`;
 
   // Lança TODOS os mirrors em paralelo — pega o primeiro com resultado real
   const promessas = OVERPASS_MIRRORS.map((m) =>
-    tentarMirror(m, query, lat, lon, 12000).then((res) => {
+    tentarMirror(m, query, lat, lon, 30000).then((res) => {
       if (!res || res.length === 0) throw new Error('vazio');
       return res;
     })
@@ -198,10 +205,9 @@ export const cnesService = {
       : TODOS_TIPOS;
 
     const resultados = await buscarOSM(lat, lon, tiposQuery, raioKm * 1000, tipo);
-    const itens = resultados.length > 0
-      ? resultados.sort((a, b) => (a.distanciaKm ?? 99) - (b.distanciaKm ?? 99))
-      : fallbackMinimo(lat, lon);
-
+    // Não cacheia resultado vazio/fallback — próxima chamada tentará novamente
+    if (resultados.length === 0) return fallbackMinimo(lat, lon);
+    const itens = resultados.sort((a, b) => (a.distanciaKm ?? 99) - (b.distanciaKm ?? 99));
     CACHE.set(cacheKey, { data: itens, ts: Date.now() });
     return itens;
   },

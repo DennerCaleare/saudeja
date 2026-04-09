@@ -11,9 +11,9 @@ export async function buscarTodasFarmacias(
   raioKm = 10
 ): Promise<EstabelecimentoSaude[]> {
 
-  // 1. Verifica cache local primeiro (que gerencia memória e storage)
+  // 1. Verifica cache local primeiro (não retorna resultado vazio cacheado)
   const cached = await getCacheFarmacias(lat, lon, raioKm);
-  if (cached) return cached;
+  if (cached && cached.length > 0) return cached;
 
   // 2. Dispara as 3 fontes em paralelo — nenhuma falha quebra o app
   const [osmResult, cnesResult, fpResult] = await Promise.allSettled([

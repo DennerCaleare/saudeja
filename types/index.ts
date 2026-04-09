@@ -96,7 +96,7 @@ export interface EstabelecimentoSaude {
   funcionamento24h: boolean;
   atendeSUS: boolean;
   participaFarmaciaPopular?: boolean;
-  fonte?: 'osm' | 'cnes' | 'fp';
+  fonte?: 'osm' | 'cnes' | 'fp' | 'gp';
   distanciaKm?: number;
 }
 

@@ -26,4 +26,10 @@ export const API = {
 
   // RENAME
   RENAME_BASE: 'https://rename.saude.gov.br/api',
+
+  // Google Places (New) — cobertura completa de farmácias comerciais no Brasil
+  // Obter em: https://console.cloud.google.com → Places API (New) → Credenciais
+  // Tier gratuito: 5.000 chamadas/mês de Nearby Search sem custo
+  // Deixe vazio ('') para usar apenas OpenStreetMap
+  GOOGLE_PLACES_API_KEY: '',
 } as const;
