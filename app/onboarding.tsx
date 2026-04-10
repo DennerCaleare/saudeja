@@ -33,7 +33,7 @@ const SLIDES: Slide[] = [
     id: 'choque',
     emoji: '💊',
     titulo: 'Sabia que muitos brasileiros pagam por remédios que o governo oferece DE GRAÇA?',
-    subtitulo: 'Dona Maria economizou o suficiente para o presente dos netos apenas usando o SaúdeJá.',
+    subtitulo: 'Dona Maria economizou o suficiente para o presente dos netos apenas usando o Poupa Remédio.',
     destaque: 'R$ 220',
     bgColor: colors.primary,           // verde escuro #00502c
   },
@@ -206,7 +206,7 @@ export default function Onboarding() {
           </Text>
 
           <TouchableOpacity style={styles.btnConcluir} onPress={concluir}>
-            <Text style={styles.btnConcluirText}>Começar a usar o SaúdeJá →</Text>
+            <Text style={styles.btnConcluirText}>Começar a usar o Poupa Remédio →</Text>
           </TouchableOpacity>
 
           <View style={{ height: 60 }} />

@@ -41,7 +41,7 @@ class GeocodeQueue {
         const timer = setTimeout(() => controller.abort(), 8000);
         
         const res = await fetch(url, {
-          headers: { 'User-Agent': 'SaudeJaApp/1.0 (contato@saudeja.app)' },
+          headers: { 'User-Agent': 'PoupaRemedioApp/1.0 (contato@pouparemedio.app)' },
           signal: controller.signal
         });
         clearTimeout(timer);

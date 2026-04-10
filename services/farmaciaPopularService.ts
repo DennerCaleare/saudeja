@@ -10,7 +10,7 @@ export async function buscarFarmaciasPopular(lat: number, lon: number, raioKm: n
 
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SaudeJaApp/1.0 (contato@saudeja.app)',
+        'User-Agent': 'PoupaRemedioApp/1.0 (contato@pouparemedio.app),'
         'Accept': 'application/json'
       },
       signal: controller.signal

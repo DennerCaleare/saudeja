@@ -1,5 +1,5 @@
 /**
- * Design System SaúdeJá — baseado nos mockups Stitch
+ * Design System Poupa Remédio — baseado nos mockups Stitch
  * Material Design 3 + Public Sans
  *
  * Tokens extraídos dos HTMLs gerados pelo Stitch Designer

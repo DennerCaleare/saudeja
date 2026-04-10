@@ -1,5 +1,5 @@
 /**
- * useResponsive — Hook central de responsividade do SaúdeJá
+ * useResponsive — Hook central de responsividade do Poupa Remédio
  *
  * Filosofia:
  * - Mobile first (< 480px): tamanhos base

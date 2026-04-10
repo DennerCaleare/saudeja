@@ -214,7 +214,7 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <Ionicons name="location-outline" size={18} color={colors.primaryContainer} />
-          <Text style={styles.logo}>SaúdeJá</Text>
+          <Text style={styles.logo}>Poupa Remédio</Text>
         </View>
         <TouchableOpacity style={styles.ligar192Btn} onPress={() => Linking.openURL('tel:192')}>
           <Text style={styles.ligar192Text}>Ligar 192</Text>

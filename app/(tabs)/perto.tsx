@@ -12,7 +12,7 @@ import { ScreenContainer } from '../../components/layout/ScreenContainer';
 import { useResponsive } from '../../hooks/useResponsive';
 import type { EstabelecimentoSaude } from '../../types';
 import { buscarFarmaciasPopular } from '../../services/farmaciaPopularService';
-import { buscarFarmaciasGooglePlaces } from '../../services/farmaciaGooglePlacesService';
+import { buscarFarmaciasDataSUS } from '../../services/farmaciaCNESDataSUSService';
 import { TABELA_CMED_BASE, calcularPMC } from '../../services/precoService';
 
 // Cores solicitadas pela especificação:
@@ -85,18 +85,18 @@ export default function PertoScreen() {
       const loc = await Location.getCurrentPositionAsync({});
       setLocalizacao({ lat: loc.coords.latitude, lon: loc.coords.longitude });
       // Fontes em paralelo:
-      // 1. OSM (Overpass) — farmácias populares + postos SUS comunitários
-      // 2. Google Places — farmácias comerciais (Drogasil, Raia, Pacheco...)
+      // 1. OSM (Overpass) — postos SUS (UBS/CAPS/UPA) + algumas farmácias
+      // 2. CNES DataSUS (gov, gratuito) — TODAS as farmácias do município
       // 3. Farmácia Popular gov — para marcar pinos verdes
-      const [osmTodos, gpFarmacias, fpResult] = await Promise.all([
+      const [osmTodos, cnesFarmacias, fpResult] = await Promise.all([
         cnesService.buscarEstabelecimentosProximos(loc.coords.latitude, loc.coords.longitude),
-        buscarFarmaciasGooglePlaces(loc.coords.latitude, loc.coords.longitude, 15000).catch(() => [] as EstabelecimentoSaude[]),
+        buscarFarmaciasDataSUS(loc.coords.latitude, loc.coords.longitude, 15).catch(() => [] as EstabelecimentoSaude[]),
         buscarFarmaciasPopular(loc.coords.latitude, loc.coords.longitude, 15).catch(() => [] as EstabelecimentoSaude[]),
       ]);
 
-      // Deduplica Google Places vs OSM por proximidade (<80m = mesma farmácia)
-      // OSM tem prioridade se o ponto já exists; Google Places preenche o que falta
-      const gpSemDuplicata = gpFarmacias.filter(gp =>
+      // Deduplica CNES DataSUS vs OSM por proximidade (<80m = mesma farmácia)
+      // OSM tem prioridade se o ponto já existe; CNES preenche o que falta
+      const cnesSemDuplicata = cnesFarmacias.filter(gp =>
         !osmTodos.some(osm =>
           osm.tipo === 'Farmacia' &&
           Math.abs(gp.coordenadas.lat - osm.coordenadas.lat) < 0.0008 &&
@@ -113,15 +113,15 @@ export default function PertoScreen() {
         return isFP ? { ...est, participaFarmaciaPopular: true, atendeSUS: true } : est;
       };
 
-      const taggedOSM = osmTodos.map(checarFP);
-      const taggedGP  = gpSemDuplicata.map(checarFP);
+      const taggedOSM  = osmTodos.map(checarFP);
+      const taggedCNES = cnesSemDuplicata.map(checarFP);
 
       // FP extras (governo) sem correspondência em nenhuma fonte anterior
       const fpExtras = fpResult.filter(fp =>
         !taggedOSM.some(e =>
           Math.abs(e.coordenadas.lat - fp.coordenadas.lat) < 0.001 &&
           Math.abs(e.coordenadas.lon - fp.coordenadas.lon) < 0.001
-        ) && !taggedGP.some(e =>
+        ) && !taggedCNES.some(e =>
           Math.abs(e.coordenadas.lat - fp.coordenadas.lat) < 0.001 &&
           Math.abs(e.coordenadas.lon - fp.coordenadas.lon) < 0.001
         )
@@ -130,7 +130,7 @@ export default function PertoScreen() {
       // UPA extraida do próprio OSM — sem chamada Overpass extra
       const upaProx = taggedOSM.find(e => e.tipo === 'UPA') ?? null;
 
-      const allEstabs = [...taggedOSM, ...taggedGP, ...fpExtras];
+      const allEstabs = [...taggedOSM, ...taggedCNES, ...fpExtras];
       setEstabelecimentos(allEstabs);
       setUPA(upaProx);
     } catch { setErroLoc(true); }

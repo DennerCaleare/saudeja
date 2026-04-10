@@ -13,7 +13,7 @@ export const API = {
 
   // OpenStreetMap
   NOMINATIM: 'https://nominatim.openstreetmap.org',
-  NOMINATIM_USER_AGENT: 'SaúdeJá/1.0 (contato@saudeja.app)',
+  NOMINATIM_USER_AGENT: 'PoupaRemedio/1.0 (contato@pouparemedio.app)',
 
   // SI-PNI / Vacinação — "a vacina do meu filho está atrasada?"
   SIPNI_BASE: 'https://apidadosabertos.saude.gov.br/v1',
@@ -27,9 +27,10 @@ export const API = {
   // RENAME
   RENAME_BASE: 'https://rename.saude.gov.br/api',
 
-  // Google Places (New) — cobertura completa de farmácias comerciais no Brasil
-  // Obter em: https://console.cloud.google.com → Places API (New) → Credenciais
-  // Tier gratuito: 5.000 chamadas/mês de Nearby Search sem custo
-  // Deixe vazio ('') para usar apenas OpenStreetMap
+  // CNES DataSUS — API gratuita do Ministério da Saúde (sem chave de API)
+  // Farmácias de todo Brasil: Drogasil, Raia, Pacheco, Minas Mais etc.
+  CNES_DATASUS_BASE: 'https://apidadosabertos.saude.gov.br',
+
+  // Google Places (New) — mantido como fallback inativo
   GOOGLE_PLACES_API_KEY: '',
 } as const;

@@ -219,7 +219,7 @@ export default function MinhaSaudeScreen() {
         <View style={styles.privacidadeCard}>
           <Ionicons name="lock-closed" size={16} color={colors.primaryContainer} />
           <Text style={styles.privacidadeText}>
-            Seus dados ficam apenas neste celular. O SaúdeJá não coleta nem envia suas informações.
+            Seus dados ficam apenas neste celular. O Poupa Remédio não coleta nem envia suas informações.
           </Text>
         </View>
 

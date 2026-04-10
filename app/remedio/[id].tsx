@@ -47,7 +47,7 @@ export default function RemedioDetalhes() {
         </TouchableOpacity>
         <View style={styles.navCenter}>
           <Ionicons name="location-outline" size={14} color={colors.primaryContainer} />
-          <Text style={styles.navTitle}>SaúdeJá</Text>
+          <Text style={styles.navTitle}>Poupa Remédio</Text>
         </View>
         <View style={{ width: 36 }} />
       </View>
